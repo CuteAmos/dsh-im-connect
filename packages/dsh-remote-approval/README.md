@@ -155,6 +155,7 @@ npm test        # npm run build && node --test tests/*.test.mjs
 | `inbound.test.mjs` | 认领审批回复 / 提问答案（含逐题推进）、无关文本 / 错账号 / 错 chatId 不认领、未激活不认领、注销 |
 | `test.test.mjs` | 测试连接：测试消息文案、缺账号 / 缺目标、账号不存在 / 未连接、成功推两条、发送失败标记 |
 | `api.test.mjs` | 管理 API：401 未认证、403 缺 client 头、GET/POST state、GET accounts / targets、POST test、404、readApiJsonBody 各分支 |
+| `index.test.mjs` | 插件入口：enabled=false 短路、未装 im-connect 优雅降级、正常注册 answerer / 入站 / API 与注销、缺 webServer 静默跳过 |
 
 ## 6. 里程碑
 
@@ -162,4 +163,4 @@ npm test        # npm run build && node --test tests/*.test.mjs
 - **M1**（已完成）：插件骨架 + 审批端到端（`approval/request` → 推送 → 回复 → resolve）。
 - **M2**（已完成）：提问端到端（`user-questions/request` → 推送 → 答案回流 / 逐题推进 → resolve）。
 - **M3**（已完成）：管理 UI（账号 / 目标选择、测试连接按钮，推送一条审批测试消息 + 一条提问测试消息）。
-- **M4**（待办）：超时 / abort / 降级与并发边界。
+- **M4**（已完成）：超时 / abort / 降级与并发边界（超时与 abort 在 `pending.test.mjs` / `question.test.mjs` / `approval.test.mjs` 覆盖；未装 im-connect 优雅降级在 `index.test.mjs` 覆盖）。

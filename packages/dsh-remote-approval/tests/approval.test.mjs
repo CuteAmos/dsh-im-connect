@@ -96,3 +96,14 @@ test('handleApproval 已有并发等待时拒绝', async () => {
   assert.equal(result, 'rejected')
   assert.equal(bridge.sent.length, 0)
 })
+
+test('handleApproval signal 已 abort 时不推送，直接返回 cancelled（新契约）', async () => {
+  const bridge = makeBridge()
+  const controller = new AbortController()
+  controller.abort()
+  const deps = makeDeps({ bridge })
+  const result = await handleApproval({ agent: { id: 'a1' }, toolName: 'bash', signal: controller.signal }, nextNever, deps)
+  assert.equal(result, 'cancelled')
+  assert.equal(bridge.sent.length, 0)
+  assert.equal(deps.pending.accountIdOf('chat1'), undefined)
+})

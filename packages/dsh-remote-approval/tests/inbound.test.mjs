@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { installInbound } from '../lib/inbound.js'
 import { PendingTable } from '../lib/pending.js'
+import { QuestionPending } from '../lib/question.js'
 
 /** 捕获 onInbound 注册的 handler 的 mock bridge。 */
 function makeBridge() {
@@ -23,6 +24,7 @@ function makeDeps(bridge, binding = { accountId: 'acc1', chatId: 'chat1' }) {
   return {
     bridge,
     pending: new PendingTable(),
+    questions: new QuestionPending(),
     readBinding: () => binding,
     log: () => {},
   }
@@ -71,4 +73,26 @@ test('installInbound 注销后不再认领', async () => {
   deps.pending.activate('chat1')
   off()
   assert.equal(bridge.handler, null)
+})
+
+test('installInbound 认领提问答案并推进下一题', async () => {
+  const bridge = makeBridge()
+  bridge.send = async (accountId, chatId, text) => { bridge.sent.push({ accountId, chatId, text }) }
+  bridge.sent = []
+  bridge.listChatTargets = () => [{ chatId: 'chat1', kind: 'dm', title: '私聊' }]
+  const deps = makeDeps(bridge)
+  installInbound(deps)
+  const qs = [{ id: 'q1', question: 'a' }, { id: 'q2', question: 'b', options: [{ label: 'B' }] }]
+  const wait = deps.questions.begin('chat1', 'acc1', qs, 5000)
+  deps.questions.activate('chat1')
+  // 第一题答案：推进到第二题
+  const handled1 = await bridge.handler('acc1', { chatId: 'chat1', text: '答案一', messageId: 'm1' })
+  assert.equal(handled1, true)
+  assert.equal(deps.questions.isReady('chat1'), true) // 第二题已 activate
+  assert.equal(bridge.sent.length, 1)
+  assert.match(bridge.sent[0].text, /b/)
+  // 第二题答案：完成
+  const handled2 = await bridge.handler('acc1', { chatId: 'chat1', text: 'B', messageId: 'm2' })
+  assert.equal(handled2, true)
+  assert.deepEqual(await wait, { answers: [{ id: 'q1', selected: [], custom: '答案一' }, { id: 'q2', selected: ['B'] }] })
 })

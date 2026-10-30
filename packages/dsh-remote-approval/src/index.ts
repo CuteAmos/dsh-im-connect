@@ -7,9 +7,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { StateStore } from './config.js'
 import { PendingTable } from './pending.js'
+import { QuestionPending } from './question.js'
 import { handleApproval } from './approval.js'
+import { handleUserQuestions } from './question-handler.js'
 import { installInbound } from './inbound.js'
 import type { ApprovalRequestLike } from './verdict.js'
+import type { UserQuestionAnswer, UserQuestionRequestLike } from './question.js'
 import type { ImConnectBridge } from './types.js'
 
 export const name = 'dsh-remote-approval'
@@ -36,27 +39,36 @@ export function apply(ctx: Context, config: PluginConfig): void {
   const stateDir = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'dsh-remote-approval')
   const state = new StateStore(join(stateDir, 'state.json'))
   const pending = new PendingTable()
+  const questions = new QuestionPending()
   const log = (line: string) => ctx.logger(name).info(line)
 
   const readBinding = () => state.read()
-  const deps = { bridge, pending, timeoutSecs: config.timeoutSecs, readBinding, log }
+  const deps = { bridge, pending, questions, timeoutSecs: config.timeoutSecs, readBinding, log }
 
   // fork 对 ctx.on 的自定义事件名同样用 unknown 强转绕过 Cordis 的 Events 类型表（见 gateway.ts:214）。
   const on = (ctx as unknown as { on: (name: string, fn: (...args: unknown[]) => unknown, opts?: unknown) => () => void }).on
   const offApproval = on('approval/request', (req: unknown, next: unknown) => {
     return handleApproval(req as ApprovalRequestLike, next as () => Promise<unknown>, deps)
   })
+  const offQuestion = on('user-questions/request', (req: unknown, next: unknown) => {
+    return handleUserQuestions(req as UserQuestionRequestLike, next as () => Promise<UserQuestionAnswer>, deps)
+  })
   const offInbound = installInbound(deps)
 
   ctx.effect(() => () => {
     offApproval()
+    offQuestion()
     offInbound()
     pending.dispose()
+    questions.dispose()
   }, 'dsh-remote-approval.dispose')
 }
 
 export { StateStore } from './config.js'
 export { PendingTable } from './pending.js'
+export { QuestionPending } from './question.js'
 export { approvalVerdict } from './verdict.js'
 export { buildApprovalPrompt } from './approval.js'
+export { validUserQuestion, formatUserQuestion, answerUserQuestion } from './question.js'
 export type { ImConnectBridge, ImConnectBridgeAccount, ImConnectBridgeChatTarget, ImMessage, InboundHandler } from './types.js'
+export type { UserQuestionOption, UserQuestionItem, UserQuestionAnswerItem, UserQuestionAnswer } from './question.js'

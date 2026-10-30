@@ -1,0 +1,74 @@
+import type { ApprovalRequestLike, ApprovalWaitResult } from './verdict.js'
+import type { PendingTable } from './pending.js'
+import type { RemoteApprovalState } from './config.js'
+import type { ImConnectBridge } from './types.js'
+
+/** 审批 answerer 的依赖：注入的 bridge、待回答的等待表、静态配置与运行时绑定。 */
+export interface ApprovalDeps {
+  bridge: ImConnectBridge
+  pending: PendingTable
+  timeoutSecs: number
+  readBinding(): RemoteApprovalState
+  log(line: string): void
+}
+
+/**
+ * 审批 answerer。作为 `approval/request` 的普通顺序（非 prepend）监听器，
+ * 只在 im-connect `next()` 放行的 Web 会话上被调用。
+ *
+ * 返回契约镜像 fork `handleApproval`：新契约（req.agent 存在）返回字符串
+ * 词汇，旧契约返回 `{behavior}`。
+ */
+export async function handleApproval(req: ApprovalRequestLike, next: () => Promise<unknown>, deps: ApprovalDeps): Promise<unknown> {
+  const currentContract = req.agent !== undefined
+  const refused = currentContract ? 'rejected' : { behavior: 'reject' }
+  const cancelled = currentContract ? 'cancelled' : { behavior: 'reject' }
+  if (req.signal?.aborted) return cancelled
+
+  const binding = deps.readBinding()
+  const accountId = binding.accountId.trim()
+  const chatId = binding.chatId.trim()
+  if (!accountId || !chatId) {
+    deps.log(`[approval] 未绑定 IM 目标，回退宿主默认 answerer`)
+    return next()
+  }
+
+  const wait = deps.pending.waitApproval(chatId, accountId, deps.timeoutSecs * 1000, req.signal)
+  if (!wait) {
+    deps.log(`[approval] chatId=${chatId} 已有未完成审批，拒绝并发`)
+    return refused
+  }
+
+  try {
+    const prompt = buildApprovalPrompt(req, deps.timeoutSecs)
+    await deps.bridge.send(accountId, chatId, prompt)
+  } catch (error) {
+    deps.pending.cancel(chatId)
+    deps.log(`[approval] 推送失败: ${error instanceof Error ? error.message : String(error)}`)
+    return refused
+  }
+
+  deps.pending.activate(chatId)
+  const verdict = await wait
+  if (req.signal?.aborted) return cancelled
+  if (verdict === 'allow') return currentContract ? 'allowed-once' : { behavior: 'allow' }
+  if (verdict === 'reject') return refused
+  return cancelled
+}
+
+/** 拼审批卡文本，与 fork `approvalPrompt` 的引导语保持一致。 */
+export function buildApprovalPrompt(req: ApprovalRequestLike, timeoutSecs: number): string {
+  const toolName = (req.toolName ?? '').trim() || '工具操作'
+  const lines = [
+    'DeepSeek Harness 需要你的审批：',
+    '',
+    `工具：${toolName}`,
+  ]
+  const reason = (req.reason ?? '').trim()
+  if (reason) lines.push(`原因：${reason}`)
+  lines.push('', '请精准回复「批准」或「拒绝」（也支持：同意 / 不同意 / yes / allow / no / reject）。')
+  lines.push(`${Math.max(1, Math.round(timeoutSecs / 60))} 分钟内未回复将取消，这次不会执行。`)
+  return lines.join('\n')
+}
+
+export type { ApprovalWaitResult }

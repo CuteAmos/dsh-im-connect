@@ -150,6 +150,13 @@ export declare class ChannelManager {
         label: string;
         sessions: SessionRecord[];
     }[];
+    /**
+     * 主动投递一条纯文本到指定账号的聊天目标（bridge 能力）。
+     * 账号未配置、未连接或发送失败时抛错，由调用方决定如何提示。
+     */
+    sendMessage(accountId: string, chatId: string, text: string): Promise<void>;
+    /** 注册入站认领钩子（bridge 能力），返回注销函数。 */
+    addInboundHandler(handler: import('./engine/types.js').InboundHandler): () => void;
     connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{
         ok: boolean;
         error?: string;

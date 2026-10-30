@@ -2,7 +2,7 @@ import { type CommandPermissions } from './command-permissions.js';
 import type { Context } from '@deepseek-ai/cordis';
 import { SeenStore } from './seen-store.js';
 import { SessionMapStore } from './session-store.js';
-import type { ChannelAdapter, EngineConfig, ImMessage } from './types.js';
+import type { ChannelAdapter, EngineConfig, ImMessage, InboundHandler } from './types.js';
 /** 一次回复投递的收口状态，由 {@link Gateway.deliver} 就地填写。 */
 export interface DeliveryOutcome {
     /** 是否全部送达；任一出现失败即为 false。 */
@@ -45,6 +45,7 @@ export declare class ImEngine {
     private readonly recoveryScope;
     private readonly observedTurns;
     private readonly channels;
+    private readonly inboundHandlers;
     private readonly router;
     private readonly broker;
     private readonly questions;
@@ -90,6 +91,11 @@ export declare class ImEngine {
     register(channel: ChannelAdapter): void;
     unregister(channelId: string): void;
     addAllowed(channelId: string, userId: string): void;
+    /**
+     * 注册外部入站认领钩子。钩子按注册顺序在 seen 去重后、授权判定前执行，
+     * 任一返回 true 即短路，本引擎不再处理该消息。返回注销函数。
+     */
+    addInboundHandler(handler: InboundHandler): () => void;
     reloadChannel(channelId: string, options?: {
         resetSessions?: boolean;
     }): Promise<void>;

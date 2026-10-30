@@ -21,6 +21,9 @@ export interface ImMessage {
   media?: ImMedia[]
 }
 
+/** 外部插件注册的入站消息认领钩子：返回 true 表示认领，引擎不再走正常流程。 */
+export type InboundHandler = (accountId: string, msg: ImMessage) => boolean | Promise<boolean>
+
 export interface ReplyStream {
   update(text: string): Promise<void>
   finish(text: string): Promise<void>

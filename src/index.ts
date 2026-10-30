@@ -7,6 +7,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { ChannelManager } from './manager.js'
+import { ImConnectBridgeService } from './bridge.js'
 import type { EngineConfig } from './engine/types.js'
 import type { TopicMode } from './engine/topic-title.js'
 import { createRotatingFileAppender } from './engine/file-log.js'
@@ -92,6 +93,8 @@ export function apply(ctx: Context, config: PluginConfig): void {
 
   const applyStarted = Date.now()
   const manager = new ChannelManager({ ctx, stateDir, log, engineConfig, hostUpdateDisabled })
+  const bridge = new ImConnectBridgeService(manager)
+  ctx.provide('imConnect', bridge)
   log(`[boot] ChannelManager 构造 ${Date.now() - applyStarted}ms`)
   // 分段回复：把「用标记分隔多条消息」的规则挂进系统提示。
   // 只有本插件已绑定、且该账号开启了分段回复的会话才拿到这段说明，其余会话提示词不变。
@@ -158,3 +161,9 @@ export {
   sessionKeyOf,
 } from './engine/session-id.js'
 export { splitText } from './engine/split.js'
+export {
+  ImConnectBridgeService,
+  type ImConnectBridge,
+  type ImConnectBridgeAccount,
+  type ImConnectBridgeChatTarget,
+} from './bridge.js'

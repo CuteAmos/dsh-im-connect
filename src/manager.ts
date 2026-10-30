@@ -458,6 +458,21 @@ export class ChannelManager {
     return [...groups.values()].filter((group) => group.sessions.length > 0)
   }
 
+  /**
+   * 主动投递一条纯文本到指定账号的聊天目标（bridge 能力）。
+   * 账号未配置、未连接或发送失败时抛错，由调用方决定如何提示。
+   */
+  async sendMessage(accountId: string, chatId: string, text: string): Promise<void> {
+    const adapter = this.running.get(accountId)
+    if (!adapter) throw new Error(`账号 ${accountId} 未连接或不存在`)
+    await adapter.send(chatId, text)
+  }
+
+  /** 注册入站认领钩子（bridge 能力），返回注销函数。 */
+  addInboundHandler(handler: import('./engine/types.js').InboundHandler): () => void {
+    return this.engine.addInboundHandler(handler)
+  }
+
   async connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{ ok: boolean; error?: string; accountId?: string; created?: boolean; newIdentity?: boolean }> {
     if (!CHANNEL_META[id]) return { ok: false, error: '未知渠道' }
     const accountId = this.accountIdFor(id, config ?? {})

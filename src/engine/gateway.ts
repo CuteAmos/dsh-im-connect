@@ -40,7 +40,7 @@ import {
   type UserQuestionAnswer,
   type UserQuestionItem,
 } from './question.js'
-import type { ChannelAdapter, EngineConfig, ImMessage, SendMode } from './types.js'
+import type { ChannelAdapter, EngineConfig, ImMessage, InboundHandler, SendMode } from './types.js'
 
 /** 分片发送的退避表（毫秒）：第一次立即，随后 1s/3s/8s/20s，累计约 32s。 */
 const SEND_RETRY_DELAYS_MS = [0, 1_000, 3_000, 8_000, 20_000] as const
@@ -128,6 +128,7 @@ export class ImEngine {
   private readonly recoveryScope = new AbortController()
   private readonly observedTurns = new Map<string, number>()
   private readonly channels = new Map<string, ChannelAdapter>()
+  private readonly inboundHandlers = new Set<InboundHandler>()
   private readonly router: SessionRouter
   private readonly broker = new ApprovalBroker()
   private readonly questions = new QuestionBroker()
@@ -329,6 +330,15 @@ export class ImEngine {
     set.add(id)
   }
 
+  /**
+   * 注册外部入站认领钩子。钩子按注册顺序在 seen 去重后、授权判定前执行，
+   * 任一返回 true 即短路，本引擎不再处理该消息。返回注销函数。
+   */
+  addInboundHandler(handler: InboundHandler): () => void {
+    this.inboundHandlers.add(handler)
+    return () => { this.inboundHandlers.delete(handler) }
+  }
+
   async reloadChannel(channelId: string, options: { resetSessions?: boolean } = {}): Promise<void> {
     this.cancelInputs(channelId)
     for (const sessionId of this.router.sessionIdsForChannel(channelId)) {
@@ -356,6 +366,7 @@ export class ImEngine {
     for (const channelId of this.inputScopes.keys()) this.cancelInputs(channelId)
     if (this.legacyServiceTimer) clearTimeout(this.legacyServiceTimer)
     for (const off of this.disposeEvents) off()
+    this.inboundHandlers.clear()
     this.fileDelivery.dispose()
     this.broker.dispose()
     this.questions.dispose()
@@ -420,6 +431,9 @@ export class ImEngine {
     try {
       if (msg.messageId && this.seen.has(`${channelId}:${msg.messageId}`)) return
       if (msg.messageId) this.seen.add(`${channelId}:${msg.messageId}`)
+      for (const handler of this.inboundHandlers) {
+        if (await handler(channelId, msg)) return
+      }
       const decision = decideAccess({
         userAllowed: this.isAuthorized(channelId, channel, msg),
         kind: msg.kind === 'group' ? 'group' : 'dm',

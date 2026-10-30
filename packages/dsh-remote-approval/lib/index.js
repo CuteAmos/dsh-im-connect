@@ -7,8 +7,9 @@ import { QuestionPending } from './question.js';
 import { handleApproval } from './approval.js';
 import { handleUserQuestions } from './question-handler.js';
 import { installInbound } from './inbound.js';
+import { registerApi } from './api.js';
 export const name = 'dsh-remote-approval';
-export const inject = ['imConnect'];
+export const inject = ['imConnect', 'webServer'];
 export const Config = Schema.object({
     enabled: Schema.boolean().default(true),
     timeoutSecs: Schema.number().default(300).description('审批等待上限（秒），到期按取消处理。'),
@@ -37,6 +38,7 @@ export function apply(ctx, config) {
         return handleUserQuestions(req, next, deps);
     });
     const offInbound = installInbound(deps);
+    registerApi(ctx, { bridge, state, log });
     ctx.effect(() => () => {
         offApproval();
         offQuestion();
@@ -50,5 +52,7 @@ export { PendingTable } from './pending.js';
 export { QuestionPending } from './question.js';
 export { approvalVerdict } from './verdict.js';
 export { buildApprovalPrompt } from './approval.js';
+export { registerApi, readApiJsonBody } from './api.js';
+export { testConnection, buildTestApprovalText, buildTestQuestionText } from './test.js';
 export { validUserQuestion, formatUserQuestion, answerUserQuestion } from './question.js';
 //# sourceMappingURL=index.js.map

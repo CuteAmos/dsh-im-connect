@@ -16,6 +16,8 @@ export { PendingTable } from './pending.js';
 export { QuestionPending } from './question.js';
 export { approvalVerdict } from './verdict.js';
 export { buildApprovalPrompt } from './approval.js';
+export { registerApi, readApiJsonBody } from './api.js';
+export { testConnection, buildTestApprovalText, buildTestQuestionText } from './test.js';
 export { validUserQuestion, formatUserQuestion, answerUserQuestion } from './question.js';
 export type { ImConnectBridge, ImConnectBridgeAccount, ImConnectBridgeChatTarget, ImMessage, InboundHandler } from './types.js';
 export type { UserQuestionOption, UserQuestionItem, UserQuestionAnswerItem, UserQuestionAnswer } from './question.js';

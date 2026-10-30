@@ -15,6 +15,9 @@ DSH 远程审批 / 提问插件：当 PC 端 DSH 跑任务遇到人工审批（�
 | 入站认领 | `src/inbound.ts` | 挂 fork 的 `onInbound`，把 IM 回复关联回 pending 审批 / 提问 |
 | 词表 / 契约 | `src/verdict.ts` | 审批词汇解析与超时常量 |
 | 本地类型 | `src/types.ts` | 与 fork `imConnect` bridge 结构一致的类型（不 import fork） |
+| 测试连接 | `src/test.ts` | 「测试连接」逻辑：校验账号 / 目标，推送一条审批测试消息 + 一条提问测试消息 |
+| 管理 API | `src/api.ts` | 自实现 webServer 鉴权 API（`/api/dsh-remote-approval`）：state 读写、accounts / targets 查询、test 触发 |
+| 配置页 | `client.js` | 浏览器 bundle，经 `plugins.bundle.config` slot 挂配置页（账号 / 目标下拉 + 测试连接按钮） |
 
 插件本质是一个**新的 answerer**：在 `approval/request` 与 `user-questions/request` waterfall 上，排在 `dsh-im-connect` 之后。`dsh-im-connect` 首行 `bindingForSession(sessionId)` 只接管「IM 发起的会话」，Web 发起的会话 `next()` 放行 → 落到本插件 → 推送到配置好的 IM 目标。
 
@@ -23,8 +26,10 @@ DSH 远程审批 / 提问插件：当 PC 端 DSH 跑任务遇到人工审批（�
 ### 2.1 注入的服务
 
 ```ts
-export const inject = ['imConnect']
+export const inject = ['imConnect', 'webServer']
 ```
+
+`webServer` 仅用于挂载配置页与管理 API（`src/api.ts`）；未安装 `dsh-im-connect` 时 `imConnect` 缺失，插件 `logger.error` 后优雅禁用，不阻塞宿主。
 
 `apply` 内 `ctx.get('imConnect')` 拿到 fork 暴露的 `ImConnectBridge`：
 
@@ -66,6 +71,32 @@ export interface ImConnectBridge {
 | --- | --- | --- |
 | `accountId` | string | 推送账号（来自 `imConnect.listAccounts()`） |
 | `chatId` | string | 推送目标（来自 `imConnect.listChatTargets(accountId)`） |
+
+### 3.1 客户端双面包声明
+
+`package.json` 的 `dsh` 字段同时声明 node 侧 bundle 与浏览器侧客户端：
+
+```json
+{
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
+  },
+  "exports": {
+    "./client": "./lib/client.js"
+  }
+}
+```
+
+- `dsh.client.inject` 是**包依赖行**（浏览器先加载这两个包，再加载本插件 bundle）。
+- `exports["./client"]` 必须指向实际存在的浏览器 bundle 文件（`lib/client.js`，由 `scripts/copy-client.mjs` 从 `client.js` 拷贝）。
+- 浏览器侧 `client.js` 工厂返回的 `exports.inject = ["slots"]` 是 **Cordis service 名**（`apply` 里用 `ctx.slots`），与 node 侧 `dsh.client.inject` 含义不同，勿混。
 
 ## 4. 接入说明
 
@@ -122,11 +153,13 @@ npm test        # npm run build && node --test tests/*.test.mjs
 | `question.test.mjs` | 提问纯函数（valid / format / answer）、`QuestionPending` 单题 / 多题 / 重入 / 超时 / cancel |
 | `question-handler.test.mjs` | 未绑定回退、非法 questions throw、群聊 @ 提示、答案回流、推送失败、abort |
 | `inbound.test.mjs` | 认领审批回复 / 提问答案（含逐题推进）、无关文本 / 错账号 / 错 chatId 不认领、未激活不认领、注销 |
+| `test.test.mjs` | 测试连接：测试消息文案、缺账号 / 缺目标、账号不存在 / 未连接、成功推两条、发送失败标记 |
+| `api.test.mjs` | 管理 API：401 未认证、403 缺 client 头、GET/POST state、GET accounts / targets、POST test、404、readApiJsonBody 各分支 |
 
 ## 6. 里程碑
 
 - **M0**（已完成）：fork 暴露 `imConnect` bridge。
 - **M1**（已完成）：插件骨架 + 审批端到端（`approval/request` → 推送 → 回复 → resolve）。
 - **M2**（已完成）：提问端到端（`user-questions/request` → 推送 → 答案回流 / 逐题推进 → resolve）。
-- **M3**（待办）：管理 UI（账号 / 目标选择、测试连接按钮）。
+- **M3**（已完成）：管理 UI（账号 / 目标选择、测试连接按钮，推送一条审批测试消息 + 一条提问测试消息）。
 - **M4**（待办）：超时 / abort / 降级与并发边界。

@@ -11,12 +11,13 @@ import { QuestionPending } from './question.js'
 import { handleApproval } from './approval.js'
 import { handleUserQuestions } from './question-handler.js'
 import { installInbound } from './inbound.js'
+import { registerApi } from './api.js'
 import type { ApprovalRequestLike } from './verdict.js'
 import type { UserQuestionAnswer, UserQuestionRequestLike } from './question.js'
 import type { ImConnectBridge } from './types.js'
 
 export const name = 'dsh-remote-approval'
-export const inject = ['imConnect']
+export const inject = ['imConnect', 'webServer']
 
 export interface PluginConfig {
   enabled: boolean
@@ -55,6 +56,8 @@ export function apply(ctx: Context, config: PluginConfig): void {
   })
   const offInbound = installInbound(deps)
 
+  registerApi(ctx, { bridge, state, log })
+
   ctx.effect(() => () => {
     offApproval()
     offQuestion()
@@ -69,6 +72,8 @@ export { PendingTable } from './pending.js'
 export { QuestionPending } from './question.js'
 export { approvalVerdict } from './verdict.js'
 export { buildApprovalPrompt } from './approval.js'
+export { registerApi, readApiJsonBody } from './api.js'
+export { testConnection, buildTestApprovalText, buildTestQuestionText } from './test.js'
 export { validUserQuestion, formatUserQuestion, answerUserQuestion } from './question.js'
 export type { ImConnectBridge, ImConnectBridgeAccount, ImConnectBridgeChatTarget, ImMessage, InboundHandler } from './types.js'
 export type { UserQuestionOption, UserQuestionItem, UserQuestionAnswerItem, UserQuestionAnswer } from './question.js'

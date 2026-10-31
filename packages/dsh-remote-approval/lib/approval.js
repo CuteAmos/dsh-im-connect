@@ -1,3 +1,4 @@
+import { isImSessionId } from './verdict.js';
 /**
  * 审批 answerer。作为 `approval/request` 的普通顺序（非 prepend）监听器，
  * 只在 im-connect `next()` 放行的 Web 会话上被调用。
@@ -11,6 +12,13 @@ export async function handleApproval(req, next, deps) {
     const cancelled = currentContract ? 'cancelled' : { behavior: 'reject' };
     if (req.signal?.aborted)
         return cancelled;
+    // IM 发起的会话由 im-connect 自己处理（它在 prepend 最外层，本插件 prepend 后会排其后），
+    // 这里显式放行，避免把 IM 会话的审批重复推给同一聊天。
+    const sessionId = req.agent?.session?.id ?? req.agent?.id ?? req.session?.id;
+    if (isImSessionId(sessionId)) {
+        deps.log(`[approval] IM 会话 ${sessionId}，交还 im-connect`);
+        return next();
+    }
     const binding = deps.readBinding();
     const accountId = binding.accountId.trim();
     const chatId = binding.chatId.trim();

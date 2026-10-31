@@ -1,4 +1,4 @@
-import type { ApprovalRequestLike, ApprovalWaitResult } from './verdict.js'
+import { isImSessionId, type ApprovalRequestLike, type ApprovalWaitResult } from './verdict.js'
 import type { PendingTable } from './pending.js'
 import type { RemoteApprovalState } from './config.js'
 import type { ImConnectBridge } from './types.js'
@@ -24,6 +24,14 @@ export async function handleApproval(req: ApprovalRequestLike, next: () => Promi
   const refused = currentContract ? 'rejected' : { behavior: 'reject' }
   const cancelled = currentContract ? 'cancelled' : { behavior: 'reject' }
   if (req.signal?.aborted) return cancelled
+
+  // IM 发起的会话由 im-connect 自己处理（它在 prepend 最外层，本插件 prepend 后会排其后），
+  // 这里显式放行，避免把 IM 会话的审批重复推给同一聊天。
+  const sessionId = req.agent?.session?.id ?? req.agent?.id ?? req.session?.id
+  if (isImSessionId(sessionId)) {
+    deps.log(`[approval] IM 会话 ${sessionId}，交还 im-connect`)
+    return next()
+  }
 
   const binding = deps.readBinding()
   const accountId = binding.accountId.trim()

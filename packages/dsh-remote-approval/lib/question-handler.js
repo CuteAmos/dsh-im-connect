@@ -1,4 +1,5 @@
 import { formatUserQuestion, validUserQuestion } from './question.js';
+import { isImSessionId } from './verdict.js';
 /** 从 bridge 的历史绑定里解析 chatId 的聊天类型；纯推送场景可能查不到。 */
 export function resolveKind(bridge, accountId, chatId) {
     try {
@@ -24,6 +25,12 @@ export async function handleUserQuestions(req, next, deps) {
     }
     if (req.signal?.aborted) {
         throw req.signal.reason ?? new DOMException('Aborted', 'AbortError');
+    }
+    // IM 发起的会话由 im-connect 自己处理；本插件只接管 Web 会话，避免重复推送。
+    const sessionId = req.agent?.session?.id ?? req.agent?.id;
+    if (isImSessionId(sessionId)) {
+        deps.log(`[question] IM 会话 ${sessionId}，交还 im-connect`);
+        return next();
     }
     const binding = deps.readBinding();
     const accountId = binding.accountId.trim();

@@ -74,3 +74,29 @@ test('handleUserQuestions signal.aborted 直接 throw', async () => {
   controller.abort(new DOMException('Aborted', 'AbortError'))
   await assert.rejects(handleUserQuestions({ questions: [{ id: 'q1', question: 'x' }], signal: controller.signal }, nextNever, deps), /Aborted/)
 })
+
+test('handleUserQuestions IM 会话（im: 前缀）交还 next()，不推送', async () => {
+  const deps = makeDeps()
+  let called = false
+  const result = await handleUserQuestions(
+    { agent: { id: 'a1', session: { id: 'im:qq_x:dm:1:chat1' } }, questions: [{ id: 'q1', question: 'x' }] },
+    async () => { called = true; return { answers: [] } },
+    deps,
+  )
+  assert.equal(called, true)
+  assert.deepEqual(result, { answers: [] })
+  assert.equal(deps.bridge.sent.length, 0)
+})
+
+test('handleUserQuestions IM 会话（dsh-im-session- 前缀）交还 next()，不推送', async () => {
+  const deps = makeDeps()
+  let called = false
+  const result = await handleUserQuestions(
+    { agent: { id: 'a1', session: { id: 'dsh-im-session-abc' } }, questions: [{ id: 'q1', question: 'x' }] },
+    async () => { called = true; return { answers: [] } },
+    deps,
+  )
+  assert.equal(called, true)
+  assert.deepEqual(result, { answers: [] })
+  assert.equal(deps.bridge.sent.length, 0)
+})

@@ -1,4 +1,5 @@
 import { formatUserQuestion, validUserQuestion, type UserQuestionAnswer, type UserQuestionItem, type UserQuestionRequestLike } from './question.js'
+import { isImSessionId } from './verdict.js'
 import type { QuestionPending } from './question.js'
 import type { RemoteApprovalState } from './config.js'
 import type { ImConnectBridge } from './types.js'
@@ -37,6 +38,13 @@ export async function handleUserQuestions(req: UserQuestionRequestLike, next: ()
   }
   if (req.signal?.aborted) {
     throw req.signal.reason ?? new DOMException('Aborted', 'AbortError')
+  }
+
+  // IM 发起的会话由 im-connect 自己处理；本插件只接管 Web 会话，避免重复推送。
+  const sessionId = req.agent?.session?.id ?? req.agent?.id
+  if (isImSessionId(sessionId)) {
+    deps.log(`[question] IM 会话 ${sessionId}，交还 im-connect`)
+    return next()
   }
 
   const binding = deps.readBinding()

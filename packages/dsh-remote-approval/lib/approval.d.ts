@@ -1,4 +1,4 @@
-import type { ApprovalRequestLike, ApprovalWaitResult } from './verdict.js';
+import { type ApprovalRequestLike, type ApprovalWaitResult } from './verdict.js';
 import type { PendingTable } from './pending.js';
 import type { RemoteApprovalState } from './config.js';
 import type { ImConnectBridge } from './types.js';

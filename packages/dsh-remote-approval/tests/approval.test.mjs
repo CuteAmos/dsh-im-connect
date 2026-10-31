@@ -108,6 +108,26 @@ test('handleApproval signal 已 abort 时不推送，直接返回 cancelled（�
   assert.equal(deps.pending.accountIdOf('chat1'), undefined)
 })
 
+test('handleApproval IM 会话（im: 前缀）交还 next()，不推送', async () => {
+  const bridge = makeBridge()
+  const deps = makeDeps({ bridge })
+  let called = false
+  const result = await handleApproval({ agent: { id: 'a1', session: { id: 'im:qq_x:dm:1:chat1' } }, toolName: 'bash' }, async () => { called = true; return 'handled-by-im-connect' }, deps)
+  assert.equal(called, true)
+  assert.equal(result, 'handled-by-im-connect')
+  assert.equal(bridge.sent.length, 0)
+})
+
+test('handleApproval IM 会话（dsh-im-session- 前缀）交还 next()，不推送', async () => {
+  const bridge = makeBridge()
+  const deps = makeDeps({ bridge })
+  let called = false
+  const result = await handleApproval({ agent: { id: 'a1', session: { id: 'dsh-im-session-abc' } }, toolName: 'bash' }, async () => { called = true; return 'handled-by-im-connect' }, deps)
+  assert.equal(called, true)
+  assert.equal(result, 'handled-by-im-connect')
+  assert.equal(bridge.sent.length, 0)
+})
+
 test('handleApproval 超时返回 cancelled 并推送超时通知', async () => {
   const bridge = makeBridge()
   const pending = new PendingTable()

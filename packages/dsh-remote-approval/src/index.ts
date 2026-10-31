@@ -50,13 +50,17 @@ export function apply(ctx: Context, config: PluginConfig): void {
     const deps = { bridge, pending, questions, timeoutSecs: config.timeoutSecs, readBinding, log }
 
     // fork 对 ctx.on 的自定义事件名同样用 unknown 强转绕过 Cordis 的 Events 类型表（见 gateway.ts:214）。
+    // prepend + global 与 fork im-connect 对齐：确保排到 api-remotes（Web UI 审批卡转发层，
+    // push 追加）之前——api-remotes 在 Web 卡有消费者时不会调用 next()，会短路其后的 answerer，
+    // 导致本插件收不到 Web 会话的审批/提问。prepend 后本插件在外层先收到，IM 会话再靠
+    // isImSessionId 显式 next() 交还 im-connect。
     const on = (runCtx as unknown as { on: (name: string, fn: (...args: unknown[]) => unknown, opts?: unknown) => () => void }).on
     const offApproval = on('approval/request', (req: unknown, next: unknown) => {
       return handleApproval(req as ApprovalRequestLike, next as () => Promise<unknown>, deps)
-    })
+    }, { prepend: true, global: true })
     const offQuestion = on('user-questions/request', (req: unknown, next: unknown) => {
       return handleUserQuestions(req as UserQuestionRequestLike, next as () => Promise<UserQuestionAnswer>, deps)
-    })
+    }, { prepend: true, global: true })
     const offInbound = installInbound(deps)
 
     registerApi(runCtx, { bridge, state, log })

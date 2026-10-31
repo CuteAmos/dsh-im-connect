@@ -15,8 +15,8 @@ function makeCtx(overrides = {}) {
       info: (line) => infos.push(line),
     }),
     get: (name) => (overrides.services ?? {})[name],
-    on: (name, fn) => {
-      listeners.push({ name, fn })
+    on: (name, fn, opts) => {
+      listeners.push({ name, fn, opts })
       return () => { listeners.length = 0 }
     },
     effect: (fn, label) => {
@@ -88,6 +88,9 @@ test('apply：imConnect 迟到就绪时通过 ctx.inject 回调完成装配', ()
   // setup 在 lateCtx 上执行，answerer/入站/effect 都挂到 lateCtx。
   const names = lateCtx.listeners.map((l) => l.name).sort()
   assert.deepEqual(names, ['approval/request', 'user-questions/request'])
+  for (const l of lateCtx.listeners) {
+    assert.deepEqual(l.opts, { prepend: true, global: true })
+  }
   assert.equal(bridge.inboundHandlers.length, 1)
   assert.equal(lateCtx.effects.length, 1)
   assert.equal(lateCtx.effects[0].label, 'dsh-remote-approval.dispose')
@@ -115,9 +118,12 @@ test('apply：正常路径注册审批/提问 answerer、入站认领与 API，�
 
   apply(ctx, { enabled: true, timeoutSecs: 300 })
 
-  // 两个 answerer 监听器都注册了。
+  // 两个 answerer 监听器都注册了，且带 prepend+global（排到 api-remotes 之前）。
   const names = ctx.listeners.map((l) => l.name).sort()
   assert.deepEqual(names, ['approval/request', 'user-questions/request'])
+  for (const l of ctx.listeners) {
+    assert.deepEqual(l.opts, { prepend: true, global: true })
+  }
 
   // 入站认领钩子已挂到 fork 的 onInbound。
   assert.equal(bridge.inboundHandlers.length, 1)

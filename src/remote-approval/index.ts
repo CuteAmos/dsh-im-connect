@@ -1,11 +1,15 @@
 /**
  * remote-approval 组件：把 Web 发起任务的人工审批 / 引导提问推送到 IM 完成。
  *
- * 并入 dsh-im-connect 后不再作为独立插件，而是纯模块：fork 的 apply 在
- * `ctx.provide('imConnect')` 之后同步调用 `setupRemoteApproval(ctx, options)`，
- * 此时 bridge 已就绪，无需再走 `ctx.inject` 迟到绑定。
+ * 作为 dsh-im-connect 包内的独立 cordis 子插件（说明符
+ * `@michengai/dsh-im-connect/remote-approval`）加载：插件管理的「包含的组件」
+ * 会为它单独显示一行开关，开关即控制本插件的 fiber enable/disable，从而控制
+ * 移动端审批（answerer）与管理 API 是否注册。`inject:['imConnect']` 是硬依赖，
+ * 因此关闭 im-connect 组件时本组件也会随之停用，不破坏 im-connect 原有功能。
  */
 import type { Context } from '@deepseek-ai/cordis'
+import Schema from '@deepseek-ai/schemastery'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { StateStore } from './config.js'
 import { PendingTable } from './pending.js'
@@ -102,3 +106,42 @@ export { testConnection, buildTestApprovalText, buildTestQuestionText } from './
 export { validUserQuestion, formatUserQuestion, answerUserQuestion } from './question.js'
 export type { ImConnectBridge, ImConnectBridgeAccount, ImConnectBridgeChatTarget, ImMessage, InboundHandler } from './types.js'
 export type { UserQuestionOption, UserQuestionItem, UserQuestionAnswerItem, UserQuestionAnswer } from './question.js'
+
+// ---------------------------------------------------------------------------
+// 独立 cordis 子插件形态：插件管理「包含的组件」会为它显示一行「远程审批」开关。
+// 开关 = 本 fiber 的 enable/disable；`inject:['imConnect']` 是硬依赖，因此
+// 关闭 im-connect 组件时本组件也会停用，im-connect 原有审批逻辑不受影响。
+// ---------------------------------------------------------------------------
+
+export const name = '@michengai/dsh-im-connect/remote-approval'
+export const inject = ['imConnect']
+
+export interface RemoteApprovalConfig {
+  enabled?: boolean
+  timeoutSecs?: number
+}
+
+export const Config: Schema<RemoteApprovalConfig> = Schema.object({
+  enabled: Schema.boolean().default(true).description('启用远程审批：把 Web 发起任务的人工审批 / 引导提问推送到配置的 IM 完成。'),
+  timeoutSecs: Schema.number().min(1).default(300).description('审批 / 提问等待回复的超时（秒），超时视为取消。'),
+})
+
+export function apply(ctx: Context, config: RemoteApprovalConfig): void {
+  // imConnect service 由 fork 在自身 apply 内 `ctx.provide('imConnect', bridge)`
+  // 提供；本组件 inject:['imConnect'] 是硬依赖，此刻必然已就绪。
+  const bridge = ctx.get('imConnect') as ImConnectBridge | undefined
+  if (!bridge) {
+    ctx.logger(name).error('未找到 imConnect service；远程审批保持禁用。')
+    return
+  }
+  const stateDir = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'dsh-remote-approval')
+  // setupRemoteApproval 内部已通过 ctx.effect 注册 dispose（label
+  // 'dsh-remote-approval.dispose'），fiber 关闭时自动清理，无需再包一层。
+  setupRemoteApproval(ctx, {
+    bridge,
+    enabled: config.enabled !== false,
+    timeoutSecs: config.timeoutSecs ?? 300,
+    stateDir,
+    log: (line) => ctx.logger(name).info(line),
+  })
+}

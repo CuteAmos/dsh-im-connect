@@ -24,11 +24,6 @@ export interface PluginConfig {
     segmentDelayMaxSecs?: number;
     updater?: boolean;
     onlineUpdate?: boolean;
-    /** 远程审批组件：把 Web 发起任务的人工审批 / 引导提问推送到配置的 IM 完成。 */
-    remoteApproval?: {
-        enabled?: boolean;
-        timeoutSecs?: number;
-    };
 }
 export declare const Config: Schema<PluginConfig>;
 export declare function apply(ctx: Context, config: PluginConfig): void;

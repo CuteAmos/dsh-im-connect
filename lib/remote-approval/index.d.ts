@@ -1,11 +1,14 @@
 /**
  * remote-approval 组件：把 Web 发起任务的人工审批 / 引导提问推送到 IM 完成。
  *
- * 并入 dsh-im-connect 后不再作为独立插件，而是纯模块：fork 的 apply 在
- * `ctx.provide('imConnect')` 之后同步调用 `setupRemoteApproval(ctx, options)`，
- * 此时 bridge 已就绪，无需再走 `ctx.inject` 迟到绑定。
+ * 作为 dsh-im-connect 包内的独立 cordis 子插件（说明符
+ * `@michengai/dsh-im-connect/remote-approval`）加载：插件管理的「包含的组件」
+ * 会为它单独显示一行开关，开关即控制本插件的 fiber enable/disable，从而控制
+ * 移动端审批（answerer）与管理 API 是否注册。`inject:['imConnect']` 是硬依赖，
+ * 因此关闭 im-connect 组件时本组件也会随之停用，不破坏 im-connect 原有功能。
  */
 import type { Context } from '@deepseek-ai/cordis';
+import Schema from '@deepseek-ai/schemastery';
 import type { ImConnectBridge } from './types.js';
 /** `setupRemoteApproval` 的入参；全部由 fork apply 显式提供。 */
 export interface RemoteApprovalOptions {
@@ -31,4 +34,12 @@ export { testConnection, buildTestApprovalText, buildTestQuestionText } from './
 export { validUserQuestion, formatUserQuestion, answerUserQuestion } from './question.js';
 export type { ImConnectBridge, ImConnectBridgeAccount, ImConnectBridgeChatTarget, ImMessage, InboundHandler } from './types.js';
 export type { UserQuestionOption, UserQuestionItem, UserQuestionAnswerItem, UserQuestionAnswer } from './question.js';
+export declare const name = "@michengai/dsh-im-connect/remote-approval";
+export declare const inject: string[];
+export interface RemoteApprovalConfig {
+    enabled?: boolean;
+    timeoutSecs?: number;
+}
+export declare const Config: Schema<RemoteApprovalConfig>;
+export declare function apply(ctx: Context, config: RemoteApprovalConfig): void;
 //# sourceMappingURL=index.d.ts.map

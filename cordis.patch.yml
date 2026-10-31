@@ -1,4 +1,5 @@
-# 把 IM 助理插入 profile。
 - insert:
     - id: im-connect
       name: '@michengai/dsh-im-connect'
+    - id: remote-approval
+      name: '@michengai/dsh-im-connect/remote-approval'

@@ -12,6 +12,11 @@
       "default": "./lib/index.js"
     },
     "./client": "./lib/client.js",
+    "./remote-approval": {
+      "types": "./lib/remote-approval/index.d.ts",
+      "default": "./lib/remote-approval/index.js"
+    },
+    "./remote-approval/locale/*.json": "./locale/remote-approval/*.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"

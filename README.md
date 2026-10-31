@@ -239,7 +239,7 @@ The configuration output should contain `im-connect`. Restart DSH Web and hard-r
 The plugin follows standard DSH bundle configuration conventions. Options are located at:
 > **Sidebar → Plugins → Click `@michengai/dsh-im-connect`** (the host's `plugins.bundle.config` slot).
 
-Four native switches are available. The first three persist in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `sidebarEntry` and `taskTreeSessions` are managed through this UI, while `onlineUpdate` is also subject to the host lock described below. The fourth, `remoteApproval`, is a Cordis YAML option (schema below) that enables the built-in **Remote Approval** component:
+Three native switches are available. They persist in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `sidebarEntry` and `taskTreeSessions` are managed through this UI, while `onlineUpdate` is also subject to the host lock described below.
 
 ### 1. Sidebar Entry (`sidebarEntry`)
 - **Default**: Disabled (`false`)
@@ -270,17 +270,18 @@ Four native switches are available. The first three persist in `channels.json` u
   - **Channels Tab Preserved**: Filtering applies only to the official workspace tree. All channel sessions remain fully available and accessible at any time under the sidebar's **Channels** tab;
   - **Lightweight Pipeline Collaboration**: Implemented via the `NativeTabRegistry.sessionFilters` inter-plugin protocol without invasive host hijacking. Toggling takes effect immediately and interoperates smoothly with Automation and Archive Manager. Non-supporting host shells degrade gracefully with a one-time warning.
 
-### 4. Remote Approval (`remoteApproval`)
+### 4. Remote Approval (component `@michengai/dsh-im-connect/remote-approval`)
 - **Default**: Enabled (`true`)
 - **Description**: Forwards **Web-initiated** tasks' approval requests and guided questions (the `ask_user_question` tool) to a configured IM account + chat, so you can approve or answer from your phone while away from the PC.
-- **How it differs from normal IM approval**: Normal approval handling only covers sessions that were started from IM (the chat bound to that session). `remoteApproval` covers the opposite case — a task you started in the web UI — by pushing its approval / question to a fixed IM target you pick in the plugin's config card.
-- **Configuration (config card)**: In the `@michengai/dsh-im-connect` bundle card, below the three switches, choose a **push account** and a **push target (chatId)**, then press **测试连接** to send one sample approval message and one sample question message. The binding is stored in `%DSH_HOME%/dsh-remote-approval/state.json`.
+- **Component switch**: Shown as a second row in the host's **包含的组件 (Components)** list for the `dsh-im-connect` package. The row's toggle enables / disables the whole component (mobile approval), and also controls whether the configuration section appears in **Settings → IM Assistant**.
+- **How it differs from normal IM approval**: Normal approval handling only covers sessions that were started from IM (the chat bound to that session). Remote Approval covers the opposite case — a task you started in the web UI — by pushing its approval / question to a fixed IM target you pick below.
+- **Configuration (Settings → IM Assistant)**: In **Settings → IM Assistant**, the **远程审批 (Remote Approval)** section lists a **push account** and a **push target (chatId)** dropdown plus a **测试连接 (Test connection)** button. The binding is stored in `%DSH_HOME%/dsh-remote-approval/state.json`. When the component is disabled, this section shows a hint instead of the controls.
 - **PC + IM coexist**: When an approval/question fires, it shows on the PC **and** is pushed to IM simultaneously; whichever side answers first wins, and the other side is released (a short "already handled on PC / IM" notice is pushed to IM). IM-originated sessions are left to the normal IM approval path.
-- **Schema**:
+- **Schema** (the component exposes its own Cordis config; the toggle in the Components list toggles the same `enabled`):
   ```yaml
-  remoteApproval:
-    enabled: true      # false disables the whole component
-    timeoutSecs: 300   # approve / answer timeout in seconds; timeout cancels
+  # via the component's config (id: remote-approval)
+  enabled: true      # false disables the whole component
+  timeoutSecs: 300   # approve / answer timeout in seconds; timeout cancels
   ```
 
 ## Usage

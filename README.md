@@ -239,7 +239,7 @@ The configuration output should contain `im-connect`. Restart DSH Web and hard-r
 The plugin follows standard DSH bundle configuration conventions. Options are located at:
 > **Sidebar → Plugins → Click `@michengai/dsh-im-connect`** (the host's `plugins.bundle.config` slot).
 
-Three native switches are available. Their values are persisted in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `sidebarEntry` and `taskTreeSessions` are managed through this UI, while `onlineUpdate` is also subject to the host lock described below:
+Four native switches are available. The first three persist in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `sidebarEntry` and `taskTreeSessions` are managed through this UI, while `onlineUpdate` is also subject to the host lock described below. The fourth, `remoteApproval`, is a Cordis YAML option (schema below) that enables the built-in **Remote Approval** component:
 
 ### 1. Sidebar Entry (`sidebarEntry`)
 - **Default**: Disabled (`false`)
@@ -269,6 +269,19 @@ Three native switches are available. Their values are persisted in `channels.jso
   - **Workspace Decluttering**: When disabled, all messaging sessions (including `dsh-im-session-*`, legacy `im:*` prefixes, and active channel session bindings) are automatically filtered out from the official workspace task tree, preventing high-frequency chats from flooding your daily development workspaces;
   - **Channels Tab Preserved**: Filtering applies only to the official workspace tree. All channel sessions remain fully available and accessible at any time under the sidebar's **Channels** tab;
   - **Lightweight Pipeline Collaboration**: Implemented via the `NativeTabRegistry.sessionFilters` inter-plugin protocol without invasive host hijacking. Toggling takes effect immediately and interoperates smoothly with Automation and Archive Manager. Non-supporting host shells degrade gracefully with a one-time warning.
+
+### 4. Remote Approval (`remoteApproval`)
+- **Default**: Enabled (`true`)
+- **Description**: Forwards **Web-initiated** tasks' approval requests and guided questions (the `ask_user_question` tool) to a configured IM account + chat, so you can approve or answer from your phone while away from the PC.
+- **How it differs from normal IM approval**: Normal approval handling only covers sessions that were started from IM (the chat bound to that session). `remoteApproval` covers the opposite case — a task you started in the web UI — by pushing its approval / question to a fixed IM target you pick in the plugin's config card.
+- **Configuration (config card)**: In the `@michengai/dsh-im-connect` bundle card, below the three switches, choose a **push account** and a **push target (chatId)**, then press **测试连接** to send one sample approval message and one sample question message. The binding is stored in `%DSH_HOME%/dsh-remote-approval/state.json`.
+- **PC + IM coexist**: When an approval/question fires, it shows on the PC **and** is pushed to IM simultaneously; whichever side answers first wins, and the other side is released (a short "already handled on PC / IM" notice is pushed to IM). IM-originated sessions are left to the normal IM approval path.
+- **Schema**:
+  ```yaml
+  remoteApproval:
+    enabled: true      # false disables the whole component
+    timeoutSecs: 300   # approve / answer timeout in seconds; timeout cancels
+  ```
 
 ## Usage
 

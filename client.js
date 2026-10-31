@@ -3661,6 +3661,126 @@ window.__ModuleLoader__.load({
       return h(IconQueueOutline, { size });
     }
 
+    function RemoteApprovalTestResult({ result }) {
+      if (!result) return null;
+      if (result.ok) {
+        const note = "已推送审批测试消息与提问测试消息，请到 IM 端确认收到。";
+        const warnings = Array.isArray(result.warnings) && result.warnings.length ? result.warnings : [];
+        return h("div", { style: { margin: "0 0 12px" } },
+          h(Tag, { color: "success" }, "测试成功"),
+          h("div", { style: { fontSize: 12, margin: "4px 0 0" } }, note),
+          warnings.map((w) => h("div", { key: String(w), style: { fontSize: 12, color: "var(--dsw-text-warning, #a60)" } }, w)));
+      }
+      return h("div", { style: { margin: "0 0 12px" } },
+        h(Tag, { color: "danger" }, "测试失败"),
+        h("div", { style: { fontSize: 12, margin: "4px 0 0", color: "var(--dsw-text-danger, #c00)" } }, result.error || "未知错误"));
+    }
+
+    // 远程审批组件配置：推送账号 / 推送目标（chatId）/ 测试连接。数据走
+    // fork 管理 API 的 remote-approval 子路由（/api/michengai/dsh-im-connect/remote-approval/*）。
+    function RemoteApprovalConfigCard() {
+      const [accounts, setAccounts] = useState([]);
+      const [targets, setTargets] = useState([]);
+      const [accountId, setAccountId] = useState("");
+      const [chatId, setChatId] = useState("");
+      const [loading, setLoading] = useState(true);
+      const [testing, setTesting] = useState(false);
+      const [testResult, setTestResult] = useState(null);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        let alive = true;
+        setLoading(true);
+        Promise.all([
+          api("/remote-approval/accounts"),
+          api("/remote-approval/state"),
+        ]).then(([acc, st]) => {
+          if (!alive) return;
+          setAccounts(Array.isArray(acc.accounts) ? acc.accounts : []);
+          if (st && st.ok && st.state) {
+            setAccountId(st.state.accountId || "");
+            setChatId(st.state.chatId || "");
+          }
+        }).catch((e) => {
+          if (alive) setError(String((e && e.message) || e));
+        }).finally(() => { if (alive) setLoading(false); });
+        return () => { alive = false; };
+      }, []);
+
+      useEffect(() => {
+        if (!accountId) { setTargets([]); return; }
+        let alive = true;
+        api("/remote-approval/targets?accountId=" + encodeURIComponent(accountId)).then((d) => {
+          if (alive && d.ok) setTargets(Array.isArray(d.targets) ? d.targets : []);
+        }).catch(() => {});
+        return () => { alive = false; };
+      }, [accountId]);
+
+      const saveState = useCallback((nextAccountId, nextChatId) => {
+        api("/remote-approval/state", { method: "POST", body: JSON.stringify({ accountId: nextAccountId, chatId: nextChatId }) }).catch(() => {});
+      }, []);
+
+      const onAccount = (id) => {
+        setAccountId(id);
+        setChatId("");
+        saveState(id, "");
+      };
+      const onTarget = (id) => {
+        setChatId(id);
+        saveState(accountId, id);
+      };
+
+      const runTest = () => {
+        setTesting(true);
+        setTestResult(null);
+        api("/remote-approval/test", { method: "POST", body: JSON.stringify({ accountId, chatId }) })
+          .then((d) => setTestResult(d))
+          .catch((e) => setTestResult({ ok: false, error: String((e && e.message) || e) }))
+          .finally(() => setTesting(false));
+      };
+
+      const accountOptions = accounts.map((a) => ({ value: a.accountId, label: (a.connected ? "" : "[未连接] ") + (a.name || a.accountId) }));
+      const targetOptions = targets.map((t) => ({ value: t.chatId, label: (t.title || t.chatId) + (t.kind === "group" ? "（群）" : "") }));
+
+      return h("div", { className: "ima-remote-approval", style: { padding: "4px 0 0", maxWidth: 420 } },
+        h("div", { className: "ima-bundle-row", style: { margin: "0 0 12px" } },
+          h("div", { className: "ima-bundle-label-box" },
+            h("span", { className: "ima-bundle-title" }, "推送账号"),
+            h("span", { className: "ima-bundle-desc" }, "接收审批 / 提问的 IM 账号")
+          ),
+          h(Select, {
+            options: accountOptions,
+            value: accountId,
+            onChange: onAccount,
+            placeholder: loading ? "加载中…" : "选择已连接的账号",
+            "aria-label": "推送账号",
+          })
+        ),
+        h("div", { className: "ima-bundle-row", style: { margin: "0 0 12px" } },
+          h("div", { className: "ima-bundle-label-box" },
+            h("span", { className: "ima-bundle-title" }, "推送目标（chatId）"),
+            h("span", { className: "ima-bundle-desc" }, "接收审批 / 提问的聊天")
+          ),
+          h(Select, {
+            options: targetOptions,
+            value: chatId,
+            onChange: onTarget,
+            placeholder: accountId ? "选择历史绑定目标" : "请先选择账号",
+            "aria-label": "推送目标",
+          })
+        ),
+        error ? h("div", { style: { color: "var(--dsw-text-danger, #c00)", fontSize: 12, margin: "0 0 12px" } }, error) : null,
+        testResult ? h(RemoteApprovalTestResult, { result: testResult }) : null,
+        h(Button, {
+          variant: "primary",
+          size: "sm",
+          block: true,
+          disabled: testing || !accountId || !chatId,
+          onClick: runTest,
+        }, testing ? "推送中…" : "测试连接")
+      );
+    }
+
     function ImBundleConfigCard(props) {
       const {
         t,
@@ -3728,6 +3848,16 @@ window.__ModuleLoader__.load({
           )
         );
       }
+
+      rows.push(h("div", { key: "remote-approval", className: "ima-bundle-row", style: { alignItems: "flex-start" } },
+        h("div", { style: { flex: 1, minWidth: 0 } },
+          h("div", { className: "ima-bundle-label-box" },
+            h("span", { className: "ima-bundle-title" }, "远程审批"),
+            h("span", { className: "ima-bundle-desc" }, "把 Web 任务的人工审批 / 引导提问推送到 IM 完成")
+          ),
+          h(RemoteApprovalConfigCard, {})
+        )
+      ));
 
       return h(React.Fragment, null, rows);
     }

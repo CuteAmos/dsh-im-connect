@@ -1,6 +1,0 @@
-# 把远程审批插件插入 profile，排在 dsh-im-connect 之后。
-# im-connect 用 prepend 抢先接管 IM 发起的会话；本插件普通顺序只接管
-# im-connect next() 放行的 Web 会话。
-- insert:
-    - id: remote-approval
-      name: 'dsh-remote-approval'

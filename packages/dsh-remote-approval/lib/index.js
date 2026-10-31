@@ -21,35 +21,50 @@ export const Config = Schema.object({
 export function apply(ctx, config) {
     if (config.enabled === false)
         return;
-    const bridge = ctx.get('imConnect');
-    if (!bridge) {
-        ctx.logger(name).error('未找到 imConnect service；请确认已安装 fork 的 dsh-im-connect。远程审批已禁用。');
-        return;
-    }
+    // StateStore 只记录文件路径、构造时不写盘，故不依赖 bridge，提前创建可被迟到 setup 复用。
     const stateDir = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'dsh-remote-approval');
     const state = new StateStore(join(stateDir, 'state.json'));
-    const pending = new PendingTable();
-    const questions = new QuestionPending();
-    const log = (line) => ctx.logger(name).info(line);
-    const readBinding = () => state.read();
-    const deps = { bridge, pending, questions, timeoutSecs: config.timeoutSecs, readBinding, log };
-    // fork 对 ctx.on 的自定义事件名同样用 unknown 强转绕过 Cordis 的 Events 类型表（见 gateway.ts:214）。
-    const on = ctx.on;
-    const offApproval = on('approval/request', (req, next) => {
-        return handleApproval(req, next, deps);
+    // 全部依赖 bridge 的装配（answerer / 入站认领 / 管理 API）收进 setup，按执行它的 ctx 挂生命周期。
+    const setup = (runCtx, bridge) => {
+        const pending = new PendingTable();
+        const questions = new QuestionPending();
+        const log = (line) => runCtx.logger(name).info(line);
+        const readBinding = () => state.read();
+        const deps = { bridge, pending, questions, timeoutSecs: config.timeoutSecs, readBinding, log };
+        // fork 对 ctx.on 的自定义事件名同样用 unknown 强转绕过 Cordis 的 Events 类型表（见 gateway.ts:214）。
+        const on = runCtx.on;
+        const offApproval = on('approval/request', (req, next) => {
+            return handleApproval(req, next, deps);
+        });
+        const offQuestion = on('user-questions/request', (req, next) => {
+            return handleUserQuestions(req, next, deps);
+        });
+        const offInbound = installInbound(deps);
+        registerApi(runCtx, { bridge, state, log });
+        runCtx.effect(() => () => {
+            offApproval();
+            offQuestion();
+            offInbound();
+            pending.dispose();
+            questions.dispose();
+        }, 'dsh-remote-approval.dispose');
+    };
+    // im-connect 的 ctx.provide('imConnect') 在它自己的 apply 里同步执行，但 loader 用
+    // Promise.all 并行启动各 bundle 的 fiber（cordis-plugin-loader EntryGroup.update:87），
+    // 顺序不保证：本插件 apply 可能先跑，此刻 ctx.get('imConnect') 尚为 undefined。
+    // 因此优先同步获取；拿不到则用 ctx.inject（Cordis 标准「服务就绪再执行」，靠 provide
+    // 的 notify 触发激活）挂起等待，无论 im-connect 先后都能正确装配。
+    const bridge = ctx.get('imConnect');
+    if (bridge) {
+        setup(ctx, bridge);
+        return;
+    }
+    ctx.logger(name).error('未找到 imConnect service；若已安装 fork 的 dsh-im-connect 将在其就绪后自动接管，否则远程审批保持禁用。');
+    ctx.inject(['imConnect'], (injectCtx) => {
+        const lateBridge = injectCtx.get('imConnect');
+        if (lateBridge)
+            setup(injectCtx, lateBridge);
     });
-    const offQuestion = on('user-questions/request', (req, next) => {
-        return handleUserQuestions(req, next, deps);
-    });
-    const offInbound = installInbound(deps);
-    registerApi(ctx, { bridge, state, log });
-    ctx.effect(() => () => {
-        offApproval();
-        offQuestion();
-        offInbound();
-        pending.dispose();
-        questions.dispose();
-    }, 'dsh-remote-approval.dispose');
 }
 export { StateStore } from './config.js';
 export { PendingTable } from './pending.js';

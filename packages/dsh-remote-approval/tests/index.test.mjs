@@ -8,6 +8,7 @@ function makeCtx(overrides = {}) {
   const infos = []
   const listeners = []
   const effects = []
+  const injected = []
   const ctx = {
     logger: () => ({
       error: (line) => errors.push(line),
@@ -22,11 +23,16 @@ function makeCtx(overrides = {}) {
       effects.push({ fn, label })
       return () => {}
     },
+    inject: (names, cb) => {
+      injected.push({ names, cb })
+      return () => {}
+    },
     webServer: overrides.webServer,
     get errors() { return errors },
     get infos() { return infos },
     get listeners() { return listeners },
     get effects() { return effects },
+    get injected() { return injected },
   }
   return ctx
 }
@@ -55,12 +61,36 @@ test('apply：enabled=false 直接返回，不访问任何服务', () => {
   assert.equal(getCalls, 0)
 })
 
-test('apply：未安装 im-connect 时 logger.error 后优雅禁用，不抛异常', () => {
+test('apply：未安装 im-connect 时 logger.error 后优雅禁用，并挂起等待迟到绑定', () => {
   const ctx = makeCtx({ services: {} })
   assert.doesNotThrow(() => apply(ctx, { enabled: true, timeoutSecs: 300 }))
   assert.ok(ctx.errors.some((line) => line.includes('未找到 imConnect service')))
   assert.equal(ctx.listeners.length, 0)
-  assert.equal(ctx.effects.length, 0)
+  // 挂起等待：已通过 ctx.inject(['imConnect'], ...) 注册迟到接管，而非直接放弃。
+  assert.equal(ctx.injected.length, 1)
+  assert.deepEqual(ctx.injected[0].names, ['imConnect'])
+})
+
+test('apply：imConnect 迟到就绪时通过 ctx.inject 回调完成装配', () => {
+  const bridge = makeBridge()
+  const webServer = { register: () => () => {} }
+  const ctx = makeCtx({ services: {}, webServer })
+
+  apply(ctx, { enabled: true, timeoutSecs: 300 })
+  assert.equal(ctx.listeners.length, 0)
+  assert.equal(ctx.injected.length, 1)
+
+  // 模拟 im-connect 稍后 provide('imConnect')：注入回调拿到 ctx2（其 get 返回 bridge）。
+  const lateCtx = makeCtx({ services: { imConnect: bridge }, webServer })
+  const { cb } = ctx.injected[0]
+  cb(lateCtx)
+
+  // setup 在 lateCtx 上执行，answerer/入站/effect 都挂到 lateCtx。
+  const names = lateCtx.listeners.map((l) => l.name).sort()
+  assert.deepEqual(names, ['approval/request', 'user-questions/request'])
+  assert.equal(bridge.inboundHandlers.length, 1)
+  assert.equal(lateCtx.effects.length, 1)
+  assert.equal(lateCtx.effects[0].label, 'dsh-remote-approval.dispose')
 })
 
 test('apply：imConnect 缺失但 webServer 存在时，仍不注册 answerer（降级路径）', () => {

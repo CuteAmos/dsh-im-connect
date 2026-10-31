@@ -107,3 +107,18 @@ test('handleApproval signal 已 abort 时不推送，直接返回 cancelled（�
   assert.equal(bridge.sent.length, 0)
   assert.equal(deps.pending.accountIdOf('chat1'), undefined)
 })
+
+test('handleApproval 超时返回 cancelled 并推送超时通知', async () => {
+  const bridge = makeBridge()
+  const pending = new PendingTable()
+  const deps = makeDeps({ bridge, pending, timeoutSecs: 1 })
+  const promise = handleApproval({ agent: { id: 'a1' }, toolName: 'bash' }, nextNever, deps)
+  await new Promise((r) => setTimeout(r, 0))
+  pending.activate('chat1')
+  const result = await promise
+  assert.equal(result, 'cancelled')
+  assert.equal(pending.accountIdOf('chat1'), undefined)
+  // 审批提示 + 超时通知共两条
+  assert.equal(bridge.sent.length, 2)
+  assert.match(bridge.sent[1].text, /超时取消/)
+})

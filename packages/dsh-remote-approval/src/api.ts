@@ -163,6 +163,10 @@ export function registerApi(ctx: Context, deps: ApiDeps): void {
           const body = await readBody()
           const accountId = asString(body.accountId)
           const chatId = asString(body.chatId)
+          if (accountId && !deps.bridge.listAccounts().some((item) => item.accountId === accountId)) {
+            send(400, { ok: false, error: `账号不存在：${accountId}` })
+            return
+          }
           const next = { accountId, chatId }
           deps.state.write(next)
           deps.log(`[api] 绑定已更新 accountId=${accountId} chatId=${chatId}`)

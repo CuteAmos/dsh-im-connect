@@ -18,13 +18,15 @@ window.__ModuleLoader__.load({
     const { useState, useEffect, useCallback, useMemo } = React;
     const h = React.createElement;
 
-    // primitives 由宿主运行时注入，缺失时回退空对象（宿主版本过旧时降级为纯文本）。
+    // primitives 由宿主运行时注入，缺失时回退空对象；ConfigCard 依赖 Button/Menu/Tag，
+    // 任一缺失时在 apply 里降级为纯文本提示（而不是 h(undefined) 抛 Element type is invalid）。
     const primitives = typeof require === "function" ? (function () {
       try { return require("@deepseek-ai/dsh-client-ui-primitives"); } catch { return {}; }
     })() : {};
     const PrimitiveButton = primitives.Button;
     const HostMenu = primitives.Menu;
     const PrimitiveTag = primitives.Tag;
+    const hasPrimitives = Boolean(PrimitiveButton && HostMenu && PrimitiveTag);
 
     const API_BASE = "/api/dsh-remote-approval";
     const BUNDLE_KEY = "dsh-remote-approval";
@@ -59,7 +61,7 @@ window.__ModuleLoader__.load({
         if (request.body === undefined) request.body = "{}";
       }
       const targetUrl = resolveApiUrl(API_BASE + path);
-      return fetch(targetUrl, request).then((r) => r.json());
+      return fetch(targetUrl, request).then((r) => r.json().catch(() => ({ ok: false, error: "服务返回非 JSON 响应（状态 " + r.status + "）" })));
     };
 
     const labelStyle = { display: "block", fontSize: "12px", color: "var(--dsw-text-secondary, #666)", margin: "0 0 4px" };
@@ -225,6 +227,10 @@ window.__ModuleLoader__.load({
         }, (ownerProps) => {
           // plugin-manager 在列表/行 summary 视图下不渲染详情卡。
           if (ownerProps && ownerProps.view === "summary") return null;
+          if (!hasPrimitives) {
+            return h("div", { style: { padding: "4px 0", fontSize: 12, color: "var(--dsw-text-secondary, #666)" } },
+              "当前宿主版本未提供所需 UI 原语（Button/Menu/Tag），无法渲染配置界面；请升级宿主或在 dsh-im-connect 侧配置绑定。");
+          }
           return h(ConfigCard, {});
         });
       });

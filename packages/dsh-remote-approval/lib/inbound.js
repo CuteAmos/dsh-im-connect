@@ -1,5 +1,6 @@
 import { approvalVerdict } from './verdict.js';
 import { formatUserQuestion } from './question.js';
+import { resolveKind } from './question-handler.js';
 /**
  * 把入站消息认领钩子挂到 fork 的 `onInbound`，返回注销函数。
  * 命中本插件 pending 的审批回复 / 提问答案时返回 true（短路 im-connect 正常
@@ -14,10 +15,10 @@ export function installInbound(deps) {
             return false;
         if (msg.media && msg.media.length > 0)
             return false;
-        // 优先认领提问答案（文字应答），其次审批回复。
-        if (await handleQuestionReply(deps, accountId, msg))
-            return true;
+        // 先认领审批回复（白名单词汇、安全敏感，优先短路），其余文本落到提问答案。
         if (await handleApprovalReply(deps, accountId, msg))
+            return true;
+        if (await handleQuestionReply(deps, accountId, msg))
             return true;
         return false;
     });
@@ -55,7 +56,7 @@ async function handleQuestionReply(deps, accountId, msg) {
     if (result.next) {
         const next = result.next;
         deps.log(`[inbound] 认领提问答案，推进到第 ${next.index + 1}/${next.total} 题（chatId=${msg.chatId}）`);
-        const kind = resolveKind(deps, accountId, msg.chatId);
+        const kind = resolveKind(deps.bridge, accountId, msg.chatId);
         try {
             const prompt = formatUserQuestion(next.question, next.index, next.total, { requiresMention: kind === 'group' });
             await deps.bridge.send(accountId, msg.chatId, prompt);
@@ -68,13 +69,5 @@ async function handleQuestionReply(deps, accountId, msg) {
         return true;
     }
     return false;
-}
-function resolveKind(deps, accountId, chatId) {
-    try {
-        return deps.bridge.listChatTargets(accountId).find((target) => target.chatId === chatId)?.kind;
-    }
-    catch {
-        return undefined;
-    }
 }
 //# sourceMappingURL=inbound.js.map

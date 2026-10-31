@@ -63,6 +63,14 @@ test('apply：未安装 im-connect 时 logger.error 后优雅禁用，不抛异�
   assert.equal(ctx.effects.length, 0)
 })
 
+test('apply：imConnect 缺失但 webServer 存在时，仍不注册 answerer（降级路径）', () => {
+  const webServer = { register: () => () => {} }
+  const ctx = makeCtx({ services: {}, webServer })
+  apply(ctx, { enabled: true, timeoutSecs: 300 })
+  assert.ok(ctx.errors.some((line) => line.includes('未找到 imConnect service')))
+  assert.equal(ctx.listeners.length, 0)
+})
+
 test('apply：正常路径注册审批/提问 answerer、入站认领与 API，并正确注销', () => {
   const bridge = makeBridge()
   const webServer = {

@@ -6,7 +6,7 @@ DSH 远程审批 / 提问插件：当 PC 端 DSH 跑任务遇到人工审批（�
 
 | 模块 | 文件 | 职责 |
 | --- | --- | --- |
-| 入口 | `src/index.ts` | 声明插件元信息、注入 `imConnect`、组装依赖、注册审批 / 提问 answerer 与入站认领、清理 |
+| 入口 | `src/index.ts` | 声明插件元信息、注入 `webServer`、组装依赖、注册审批 / 提问 answerer 与入站认领、清理 |
 | 静态配置 | `src/config.ts` | `PluginConfig` 的运行时绑定 `StateStore`（读 / 写 `state.json`） |
 | 审批等待表 | `src/pending.ts` | 审批 correlation：等待 → 激活 → 应答 / 取消 / 超时 / abort |
 | 审批 answerer | `src/approval.ts` | `approval/request` 监听器 + 审批卡文案 |
@@ -26,10 +26,12 @@ DSH 远程审批 / 提问插件：当 PC 端 DSH 跑任务遇到人工审批（�
 ### 2.1 注入的服务
 
 ```ts
-export const inject = ['imConnect', 'webServer']
+export const inject = ['webServer']
 ```
 
-`webServer` 仅用于挂载配置页与管理 API（`src/api.ts`）；未安装 `dsh-im-connect` 时 `imConnect` 缺失，插件 `logger.error` 后优雅禁用，不阻塞宿主。
+`webServer` 仅用于挂载配置页与管理 API（`src/api.ts`）。
+
+> 注意：`imConnect` 不能放进数组 `inject`——Cordis 数组 inject 是硬依赖，任一 service 未提供时整个 fiber 停在 INACTIVE、`apply` 根本不会被调用，「未安装 fork 时优雅降级」就变成不可达代码。因此 `imConnect` 改为 `apply` 内 `ctx.get('imConnect')` 手动获取（靠 `cordis.patch.yml` 排 `im-connect` 之后、其 `apply` 内同步 `provide` 拿到）；未安装 fork 时 `get` 返回 `undefined`，插件 `logger.error` 后优雅禁用，不阻塞宿主。
 
 `apply` 内 `ctx.get('imConnect')` 拿到 fork 暴露的 `ImConnectBridge`：
 
@@ -63,7 +65,7 @@ export interface ImConnectBridge {
 | 键 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `enabled` | boolean | `true` | 是否启用本插件 |
-| `timeoutSecs` | number | `300` | 审批 / 提问等待上限（秒），到期按取消 / abort 处理 |
+| `timeoutSecs` | number | `300` | 审批 / 提问等待上限（秒），到期按取消 / abort 处理（`min(1)`） |
 
 运行时绑定（不是静态配置，而是 `state.json` 动态数据，见 §4）：
 
@@ -149,13 +151,13 @@ npm test        # npm run build && node --test tests/*.test.mjs
 | `verdict.test.mjs` | 审批词汇解析、审批卡文案 |
 | `config.test.mjs` | StateStore 读写 / 缺失 / 损坏 |
 | `pending.test.mjs` | 审批等待表完整生命周期、并发拒绝、超时、abort、cancel、dispose |
-| `approval.test.mjs` | 未绑定回退、完整通过 / 拒绝、推送失败、新旧契约、并发拒绝 |
+| `approval.test.mjs` | 未绑定回退、完整通过 / 拒绝、推送失败、新旧契约、并发拒绝、超时通知、signal abort |
 | `question.test.mjs` | 提问纯函数（valid / format / answer）、`QuestionPending` 单题 / 多题 / 重入 / 超时 / cancel |
 | `question-handler.test.mjs` | 未绑定回退、非法 questions throw、群聊 @ 提示、答案回流、推送失败、abort |
-| `inbound.test.mjs` | 认领审批回复 / 提问答案（含逐题推进）、无关文本 / 错账号 / 错 chatId 不认领、未激活不认领、注销 |
+| `inbound.test.mjs` | 认领审批回复 / 提问答案（含逐题推进）、审批优先于提问（同 chatId 时「批准」不吞）、无关文本 / 错账号 / 错 chatId 不认领、未激活不认领、注销 |
 | `test.test.mjs` | 测试连接：测试消息文案、缺账号 / 缺目标、账号不存在 / 未连接、成功推两条、发送失败标记 |
-| `api.test.mjs` | 管理 API：401 未认证、403 缺 client 头、GET/POST state、GET accounts / targets、POST test、404、readApiJsonBody 各分支 |
-| `index.test.mjs` | 插件入口：enabled=false 短路、未装 im-connect 优雅降级、正常注册 answerer / 入站 / API 与注销、缺 webServer 静默跳过 |
+| `api.test.mjs` | 管理 API：401 未认证、403 缺 client 头、GET/POST state（含账号不存在 400）、GET accounts / targets、POST test、404、readApiJsonBody 各分支 |
+| `index.test.mjs` | 插件入口：enabled=false 短路、未装 im-connect 优雅降级（含 webServer 存在时仍降级）、正常注册 answerer / 入站 / API 与注销、缺 webServer 静默跳过 |
 
 ## 6. 里程碑
 
@@ -164,3 +166,7 @@ npm test        # npm run build && node --test tests/*.test.mjs
 - **M2**（已完成）：提问端到端（`user-questions/request` → 推送 → 答案回流 / 逐题推进 → resolve）。
 - **M3**（已完成）：管理 UI（账号 / 目标选择、测试连接按钮，推送一条审批测试消息 + 一条提问测试消息）。
 - **M4**（已完成）：超时 / abort / 降级与并发边界（超时与 abort 在 `pending.test.mjs` / `question.test.mjs` / `approval.test.mjs` 覆盖；未装 im-connect 优雅降级在 `index.test.mjs` 覆盖）。
+
+## 7. 变更历史
+
+- **v0.1.0 之后（review 修复）**：修复 review 发现的 P1/P2/P3 问题——P1 `inject` 移除 `imConnect`（改 `ctx.get` 手动获取，使降级路径可达）；P2-1 审批超时推 IM 通知；P2-2 同 chatId 时审批优先于提问认领；P2-3 抽公共 `resolveKind`；P2-4 `timeoutSecs` 加 `min(1)`；P2-5 客户端 UI 原语缺失真兜底；P3-1 POST `/state` 校验账号存在；P3-2 客户端 `api()` 容错非 JSON 响应。

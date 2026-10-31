@@ -17,7 +17,11 @@ import type { UserQuestionAnswer, UserQuestionRequestLike } from './question.js'
 import type { ImConnectBridge } from './types.js'
 
 export const name = 'dsh-remote-approval'
-export const inject = ['imConnect', 'webServer']
+// imConnect 不能放进数组 inject：数组是 Cordis 硬依赖，任一 service 未提供时
+// 整个 fiber 停在 INACTIVE、apply 根本不会被调用，「未安装 fork 时优雅降级」
+// 就变成不可达代码。改为 apply 内 ctx.get('imConnect') 手动获取，配合
+// cordis.patch.yml 的加载顺序（排 im-connect 之后，其 apply 内同步 provide）拿到。
+export const inject = ['webServer']
 
 export interface PluginConfig {
   enabled: boolean
@@ -26,7 +30,7 @@ export interface PluginConfig {
 
 export const Config: Schema<PluginConfig> = Schema.object({
   enabled: Schema.boolean().default(true),
-  timeoutSecs: Schema.number().default(300).description('审批等待上限（秒），到期按取消处理。'),
+  timeoutSecs: Schema.number().min(1).default(300).description('审批等待上限（秒），到期按取消处理。'),
 })
 
 export function apply(ctx: Context, config: PluginConfig): void {

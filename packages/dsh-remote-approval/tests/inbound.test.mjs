@@ -96,3 +96,18 @@ test('installInbound 认领提问答案并推进下一题', async () => {
   assert.equal(handled2, true)
   assert.deepEqual(await wait, { answers: [{ id: 'q1', selected: [], custom: '答案一' }, { id: 'q2', selected: ['B'] }] })
 })
+
+test('installInbound 审批与提问同 chatId 时，「批准」优先归审批不被提问吞掉', async () => {
+  const bridge = makeBridge()
+  const deps = makeDeps(bridge)
+  installInbound(deps)
+  // 同 chatId 同时存在一个审批等待和一个提问等待
+  deps.pending.waitApproval('chat1', 'acc1', 5000)
+  deps.pending.activate('chat1')
+  deps.questions.begin('chat1', 'acc1', [{ id: 'q1', question: 'x' }], 5000)
+  deps.questions.activate('chat1')
+  const handled = await bridge.handler('acc1', { chatId: 'chat1', text: '批准', messageId: 'm1' })
+  assert.equal(handled, true)
+  assert.equal(deps.pending.accountIdOf('chat1'), undefined) // 审批已被答掉
+  assert.equal(deps.questions.accountIdOf('chat1'), 'acc1') // 提问仍在
+})

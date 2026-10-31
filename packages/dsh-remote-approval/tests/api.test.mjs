@@ -112,11 +112,26 @@ test('registerApi POST state 写绑定并返回', async () => {
   registerApi(ctx, makeDeps(makeBridge(), state))
   const result = await invoke(ctx.handler, 'POST', '/api/dsh-remote-approval/state', {
     headers: { 'content-type': 'application/json', 'x-dsh-im-connect-client': '1' },
-    body: JSON.stringify({ accountId: 'acc2', chatId: 'chat2' }),
+    body: JSON.stringify({ accountId: 'acc1', chatId: 'chat2' }),
   })
   assert.equal(result.status, 200)
-  assert.deepEqual(result.body.state, { accountId: 'acc2', chatId: 'chat2' })
-  assert.deepEqual(state.read(), { accountId: 'acc2', chatId: 'chat2' })
+  assert.deepEqual(result.body.state, { accountId: 'acc1', chatId: 'chat2' })
+  assert.deepEqual(state.read(), { accountId: 'acc1', chatId: 'chat2' })
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('registerApi POST state 账号不存在返回 400', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ra-'))
+  const state = new StateStore(join(dir, 's.json'))
+  const ctx = makeCtx()
+  registerApi(ctx, makeDeps(makeBridge(), state))
+  const result = await invoke(ctx.handler, 'POST', '/api/dsh-remote-approval/state', {
+    headers: { 'content-type': 'application/json', 'x-dsh-im-connect-client': '1' },
+    body: JSON.stringify({ accountId: 'nope', chatId: 'chat1' }),
+  })
+  assert.equal(result.status, 400)
+  assert.equal(result.body.ok, false)
+  assert.deepEqual(state.read(), { accountId: '', chatId: '' })
   rmSync(dir, { recursive: true, force: true })
 })
 

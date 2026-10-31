@@ -53,6 +53,10 @@ export async function handleApproval(req: ApprovalRequestLike, next: () => Promi
   if (req.signal?.aborted) return cancelled
   if (verdict === 'allow') return currentContract ? 'allowed-once' : { behavior: 'allow' }
   if (verdict === 'reject') return refused
+  if (verdict === 'timeout') {
+    void deps.bridge.send(accountId, chatId, `审批已超时取消（${Math.max(1, Math.round(deps.timeoutSecs / 60))} 分钟未回复），这次不会执行。`).catch(() => undefined)
+    deps.log(`[approval] 审批超时取消 chatId=${chatId}`)
+  }
   return cancelled
 }
 

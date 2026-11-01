@@ -4,7 +4,9 @@
  * 作为 dsh-im-connect 包内的独立 cordis 子插件（说明符
  * `@michengai/dsh-im-connect/remote-approval`）加载：插件管理的「包含的组件」
  * 会为它单独显示一行开关，开关即控制本插件的 fiber enable/disable，从而控制
- * 移动端审批（answerer）与管理 API 是否注册。`inject:['imConnect']` 是硬依赖，
+ * 移动端审批（answerer）与管理 API 是否注册。`inject:['imConnect','webServer']`
+ * 是硬依赖：imConnect 由 fork 主插件 `ctx.provide('imConnect')` 提供，webServer
+ * 由 Host 提供（registerApi 里以 `ctx.webServer` 属性访问，必须在 inject 声明）。
  * 因此关闭 im-connect 组件时本组件也会随之停用，不破坏 im-connect 原有功能。
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -114,7 +116,10 @@ export type { UserQuestionOption, UserQuestionItem, UserQuestionAnswerItem, User
 // ---------------------------------------------------------------------------
 
 export const name = '@michengai/dsh-im-connect/remote-approval'
-export const inject = ['imConnect']
+// webServer 是硬依赖：registerApi 用 `ctx.webServer` 属性访问（与 fork manager.ts
+// 的 registerApi 同款强转取法），Cordis 对未在 inject 声明的 service 属性访问会抛
+// `cannot get property "webServer" without inject`，故必须在此声明。
+export const inject = ['imConnect', 'webServer']
 
 export interface RemoteApprovalConfig {
   enabled?: boolean

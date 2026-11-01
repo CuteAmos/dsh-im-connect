@@ -94,7 +94,7 @@ export interface ApiDeps {
  * 注册 `/api/dsh-remote-approval` 前缀管理 API，供配置页读取账号/目标、
  * 读写绑定、测试连接。身份认证与写请求格式校验完全照抄 fork `registerApi`。
  */
-export function registerApi(ctx: Context, deps: ApiDeps): void {
+export function registerApi(ctx: Context, deps: ApiDeps): () => void {
   const webServer = (ctx as Context & {
     webServer?: {
       register(route: {
@@ -106,7 +106,7 @@ export function registerApi(ctx: Context, deps: ApiDeps): void {
   }).webServer
   if (!webServer) {
     deps.log('[api] 未找到 webServer service，管理 API 未注册')
-    return
+    return () => {}
   }
 
   const send = (res: ServerResponse, status: number, body: unknown) => {
@@ -202,7 +202,7 @@ export function registerApi(ctx: Context, deps: ApiDeps): void {
   }
 
   const basePath = '/api/michengai/dsh-im-connect/remote-approval'
-  webServer.register({
+  const dispose = webServer.register({
     kind: 'prefix',
     path: basePath,
     handler: async (req, res) => {
@@ -237,4 +237,7 @@ export function registerApi(ctx: Context, deps: ApiDeps): void {
     },
   })
   deps.log('[api] API 已注册 /api/michengai/dsh-im-connect/remote-approval')
+  return () => {
+    if (typeof dispose === 'function') dispose()
+  }
 }

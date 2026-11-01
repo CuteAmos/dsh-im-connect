@@ -77,13 +77,14 @@ export function setupRemoteApproval(ctx: Context, options: RemoteApprovalOptions
     : noop
   const offInbound = installInbound(deps)
 
-  registerApi(ctx, { bridge: options.bridge, state, log: options.log })
+  const offApi = registerApi(ctx, { bridge: options.bridge, state, log: options.log })
 
   if (typeof (ctx as { effect?: unknown }).effect === 'function') {
     ctx.effect(() => () => {
       offApproval()
       offQuestion()
       offInbound()
+      offApi()
       pending.dispose()
       questions.dispose()
     }, 'dsh-remote-approval.dispose')
@@ -93,6 +94,7 @@ export function setupRemoteApproval(ctx: Context, options: RemoteApprovalOptions
     offApproval()
     offQuestion()
     offInbound()
+    offApi()
     pending.dispose()
     questions.dispose()
   }

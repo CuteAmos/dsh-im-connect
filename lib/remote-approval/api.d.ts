@@ -19,6 +19,6 @@ export interface ApiDeps {
  * 注册 `/api/dsh-remote-approval` 前缀管理 API，供配置页读取账号/目标、
  * 读写绑定、测试连接。身份认证与写请求格式校验完全照抄 fork `registerApi`。
  */
-export declare function registerApi(ctx: Context, deps: ApiDeps): void;
+export declare function registerApi(ctx: Context, deps: ApiDeps): () => void;
 export {};
 //# sourceMappingURL=api.d.ts.map
